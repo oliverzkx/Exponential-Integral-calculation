@@ -29,6 +29,8 @@ bool verbose,timing,cpu;
 int maxIterations;
 unsigned int n,numberOfSamples;
 double a,b;	// The interval that we are going to use
+bool useDouble = false;
+
 
 int main(int argc, char *argv[]) {
 	unsigned int ui,uj;
@@ -102,11 +104,11 @@ int main(int argc, char *argv[]) {
 	}else {
 	// GPU 模式：调用你写的 launch_cuda_integral 接口
 	// GPU mode 
-		launch_cuda_integral(n, numberOfSamples, a, b, maxIterations, timing, verbose);
+		launch_cuda_integral(n, numberOfSamples, a, b, maxIterations, timing, verbose, useDouble);
 	}
 
-	if (!cpu) test_double_kernel(n, numberOfSamples, a, b, maxIterations);
-	
+	//if (!cpu) test_double_kernel(n, numberOfSamples, a, b, maxIterations);
+
 	if (timing) {
 		if (cpu) {
 			printf ("calculating the exponentials on the cpu took: %f seconds\n",timeTotalCpu);
@@ -251,7 +253,7 @@ float exponentialIntegralFloat (const int n,const float x) {
 int parseArguments (int argc, char *argv[]) {
 	int c;
 
-	while ((c = getopt (argc, argv, "cghn:m:a:b:tv")) != -1) {
+	while ((c = getopt (argc, argv, "cghn:m:a:b:tvd")) != -1) {
 		switch(c) {
 			case 'c':
 				cpu=false; break;	 //Skip the CPU test
@@ -271,6 +273,8 @@ int parseArguments (int argc, char *argv[]) {
 				timing = true; break;
 			case 'v':
 				verbose = true; break;
+			case 'd':
+				useDouble = true; break;
 			default:
 				fprintf(stderr, "Invalid option given\n");
 				printUsage();
@@ -295,5 +299,6 @@ void printUsage () {
 	printf("      -m   size    : will set the number of samples taken in the (a,b) interval to size (default: 10)\n");
 	printf("      -t           : will output the amount of time that it took to generate each norm (default: no)\n");
 	printf("      -v           : will activate the verbose mode  (default: no)\n");
+	printf("      -d           : use double precision for GPU computation (default: float)\n"); // new add
 	printf("     \n");
 }

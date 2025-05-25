@@ -65,35 +65,51 @@ __global__ void computeExponentialIntegralKernel(
 }
 
 void launch_cuda_integral(int n, int numberOfSamples, float a, float b, int maxIterations, bool timing, bool verbose) {
-	int total = n * numberOfSamples;
-	float* d_result;
-	float* h_result = new float[total];
+    int total = n * numberOfSamples;
+    float* d_result;
+    float* h_result = new float[total];
 
-	cudaMalloc((void**)&d_result, sizeof(float) * total);
+    cudaMalloc((void**)&d_result, sizeof(float) * total);
 
-	int threadsPerBlock = 256;
-	int blocksPerGrid = (total + threadsPerBlock - 1) / threadsPerBlock;
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (total + threadsPerBlock - 1) / threadsPerBlock;
 
-	if (verbose) {
-		std::cout << "[CUDA] Launching kernel with " << blocksPerGrid << " blocks, "
-		          << threadsPerBlock << " threads per block\n";
-	}
+    // CUDA timing events
+    cudaEvent_t start, stop;
+    float milliseconds = 0.0f;
+    if (timing) {
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
+        cudaEventRecord(start);
+    }
 
-	computeExponentialIntegralKernel<<<blocksPerGrid, threadsPerBlock>>>(n, numberOfSamples, a, b, maxIterations, d_result);
-	cudaDeviceSynchronize();
+    // Launch the kernel
+    computeExponentialIntegralKernel<<<blocksPerGrid, threadsPerBlock>>>(n, numberOfSamples, a, b, maxIterations, d_result);
+    cudaDeviceSynchronize();
 
-	cudaMemcpy(h_result, d_result, sizeof(float) * total, cudaMemcpyDeviceToHost);
+    // Copy result back to host
+    cudaMemcpy(h_result, d_result, sizeof(float) * total, cudaMemcpyDeviceToHost);
 
-	if (verbose) {
-		for (int i = 0; i < n; ++i) {
-			for (int j = 0; j < numberOfSamples; ++j) {
-				int idx = i * numberOfSamples + j;
-				std::cout << "[GPU] E_" << (i + 1) << "(" << (a + (b - a) / numberOfSamples * (j + 1)) << ") = "
-				          << h_result[idx] << std::endl;
-			}
-		}
-	}
+    if (timing) {
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&milliseconds, start, stop);
+        std::cout << "[CUDA] Total GPU time (including kernel + memcpy): " << milliseconds << " ms" << std::endl;
+        cudaEventDestroy(start);
+        cudaEventDestroy(stop);
+    }
 
-	cudaFree(d_result);
-	delete[] h_result;
+    if (verbose) {
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < numberOfSamples; ++j) {
+                int idx = i * numberOfSamples + j;
+                float x = a + ((b - a) / numberOfSamples) * (j + 1);
+                std::cout << "[GPU] E_" << (i + 1) << "(" << x << ") = "
+                          << h_result[idx] << std::endl;
+            }
+        }
+    }
+
+    cudaFree(d_result);
+    delete[] h_result;
 }

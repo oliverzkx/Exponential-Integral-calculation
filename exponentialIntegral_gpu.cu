@@ -2,10 +2,23 @@
 #include <cuda_runtime.h>
 #include "exponentialIntegral_gpu.cuh"
 
+/**
+ * @brief A dummy CUDA kernel placeholder (not used in final implementation).
+ */
 __global__ void dummy_kernel() {
-    
+    // No operation
 }
 
+/**
+ * @brief Device function that evaluates the exponential integral E_n(x) in float precision.
+ *
+ * Implements continued fraction or series expansion depending on the value of x.
+ *
+ * @param n The order of the exponential integral.
+ * @param x The point at which to evaluate E_n(x).
+ * @param maxIterations Maximum number of iterations for convergence.
+ * @return The value of E_n(x) as a float.
+ */
 __device__ float exponentialIntegralFloatDevice(const int n, const float x, const int maxIterations) {
 	const float eulerConstant = 0.5772156649015329f;
 	const float epsilon = 1.E-30f;
@@ -50,6 +63,18 @@ __device__ float exponentialIntegralFloatDevice(const int n, const float x, cons
 	}
 }
 
+/**
+ * @brief CUDA kernel that computes exponential integrals in parallel.
+ *
+ * Each thread computes one E_n(x) value and stores it into the result array.
+ *
+ * @param n Maximum order of E_n(x).
+ * @param numberOfSamples Number of x samples in the interval [a, b].
+ * @param a Left bound of interval.
+ * @param b Right bound of interval.
+ * @param maxIterations Maximum iterations for convergence.
+ * @param result Output array of size n * numberOfSamples.
+ */
 __global__ void computeExponentialIntegralKernel(
     int n, int numberOfSamples, float a, float b, int maxIterations, float* result) {
     
@@ -64,6 +89,19 @@ __global__ void computeExponentialIntegralKernel(
     result[idx] = exponentialIntegralFloatDevice(i, x, maxIterations);
 }
 
+/**
+ * @brief Host function that allocates memory, launches kernel, retrieves and optionally prints results.
+ *
+ * Also includes timing of kernel + memory copy via CUDA events.
+ *
+ * @param n Maximum order of exponential integral.
+ * @param numberOfSamples Number of samples between interval [a, b].
+ * @param a Interval start.
+ * @param b Interval end.
+ * @param maxIterations Max iterations for numerical convergence.
+ * @param timing Whether to time the GPU execution.
+ * @param verbose Whether to print detailed results.
+ */
 void launch_cuda_integral(int n, int numberOfSamples, float a, float b, int maxIterations, bool timing, bool verbose) {
     int total = n * numberOfSamples;
     float* d_result;
@@ -84,7 +122,8 @@ void launch_cuda_integral(int n, int numberOfSamples, float a, float b, int maxI
     }
 
     // Launch the kernel
-    computeExponentialIntegralKernel<<<blocksPerGrid, threadsPerBlock>>>(n, numberOfSamples, a, b, maxIterations, d_result);
+    computeExponentialIntegralKernel<<<blocksPerGrid, threadsPerBlock>>>(
+        n, numberOfSamples, a, b, maxIterations, d_result);
     cudaDeviceSynchronize();
 
     // Copy result back to host

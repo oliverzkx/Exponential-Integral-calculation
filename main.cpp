@@ -105,6 +105,8 @@ int main(int argc, char *argv[]) {
 		launch_cuda_integral(n, numberOfSamples, a, b, maxIterations, timing, verbose);
 	}
 
+	if (!cpu) test_double_kernel(n, numberOfSamples, a, b, maxIterations);
+	
 	if (timing) {
 		if (cpu) {
 			printf ("calculating the exponentials on the cpu took: %f seconds\n",timeTotalCpu);

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cuda_runtime.h>
+#include <vector>
 #include "exponentialIntegral_gpu.cuh"
 
 /**
@@ -166,25 +167,14 @@ __global__ void computeExponentialIntegralDoubleKernel(
     result[idx] = exponentialIntegralDoubleDevice(i, x, maxIterations);
 }
 
-/**
- * @brief Host function that allocates memory, launches kernel, retrieves and optionally prints results.
- *
- * Also includes timing of kernel + memory copy via CUDA events.
- *
- * @param n Maximum order of exponential integral.
- * @param numberOfSamples Number of samples between interval [a, b].
- * @param a Interval start.
- * @param b Interval end.
- * @param maxIterations Max iterations for numerical convergence.
- * @param timing Whether to time the GPU execution.
- * @param verbose Whether to print detailed results.
- */
-void launch_cuda_integral(int n, int numberOfSamples, float a, float b, int maxIterations, bool timing, bool verbose, bool useDouble) {
+void launch_cuda_integral(int n, int numberOfSamples, float a, float b, int maxIterations,
+                          bool timing, bool verbose, bool useDouble,
+                          std::vector<float>& gpuFloatOut, std::vector<double>& gpuDoubleOut) {
     int total = n * numberOfSamples;
 
     if (useDouble) {
         double* d_result;
-        double* h_result = new double[total];
+        gpuDoubleOut.resize(total);
         cudaMalloc((void**)&d_result, sizeof(double) * total);
 
         int threadsPerBlock = 256;
@@ -202,7 +192,7 @@ void launch_cuda_integral(int n, int numberOfSamples, float a, float b, int maxI
             n, numberOfSamples, a, b, maxIterations, d_result);
         cudaDeviceSynchronize();
 
-        cudaMemcpy(h_result, d_result, sizeof(double) * total, cudaMemcpyDeviceToHost);
+        cudaMemcpy(gpuDoubleOut.data(), d_result, sizeof(double) * total, cudaMemcpyDeviceToHost);
 
         if (timing) {
             cudaEventRecord(stop);
@@ -214,22 +204,14 @@ void launch_cuda_integral(int n, int numberOfSamples, float a, float b, int maxI
         }
 
         if (verbose) {
-            for (int i = 0; i < n; ++i) {
-                for (int j = 0; j < numberOfSamples; ++j) {
-                    int idx = i * numberOfSamples + j;
-                    double x = a + ((b - a) / numberOfSamples) * (j + 1);
-                    std::cout << "[GPU-DOUBLE] E_" << (i + 1) << "(" << x << ") = "
-                            << h_result[idx] << std::endl;
-                }
-            }
+            for (int i = 0; i < total; ++i)
+                std::cout << "[GPU-DOUBLE] E = " << gpuDoubleOut[i] << std::endl;
         }
 
         cudaFree(d_result);
-        delete[] h_result;
-
     } else {
         float* d_result;
-        float* h_result = new float[total];
+        gpuFloatOut.resize(total);
         cudaMalloc((void**)&d_result, sizeof(float) * total);
 
         int threadsPerBlock = 256;
@@ -247,7 +229,7 @@ void launch_cuda_integral(int n, int numberOfSamples, float a, float b, int maxI
             n, numberOfSamples, a, b, maxIterations, d_result);
         cudaDeviceSynchronize();
 
-        cudaMemcpy(h_result, d_result, sizeof(float) * total, cudaMemcpyDeviceToHost);
+        cudaMemcpy(gpuFloatOut.data(), d_result, sizeof(float) * total, cudaMemcpyDeviceToHost);
 
         if (timing) {
             cudaEventRecord(stop);
@@ -259,18 +241,11 @@ void launch_cuda_integral(int n, int numberOfSamples, float a, float b, int maxI
         }
 
         if (verbose) {
-            for (int i = 0; i < n; ++i) {
-                for (int j = 0; j < numberOfSamples; ++j) {
-                    int idx = i * numberOfSamples + j;
-                    float x = a + ((b - a) / numberOfSamples) * (j + 1);
-                    std::cout << "[GPU] E_" << (i + 1) << "(" << x << ") = "
-                            << h_result[idx] << std::endl;
-                }
-            }
+            for (int i = 0; i < total; ++i)
+                std::cout << "[GPU] E = " << gpuFloatOut[i] << std::endl;
         }
 
         cudaFree(d_result);
-        delete[] h_result;
     }
 }
 

@@ -18,18 +18,22 @@
 
 using namespace std;
 
+unsigned int n,numberOfSamples;
+double a,b;	// The interval that we are going to use
+
+bool verbose = false;
+bool timing = false;
+bool cpu = true;
+bool useDouble = false;
+int maxIterations = 2000000000;
+
 float	exponentialIntegralFloat		(const int n,const float x);
 double	exponentialIntegralDouble		(const int n,const double x);
 void	outputResultsCpu			(const std::vector< std::vector< float  > > &resultsFloatCpu,const std::vector< std::vector< double > > &resultsDoubleCpu);
 int		parseArguments				(int argc, char **argv);
-void	printUsage				(void);
-
-
-bool verbose,timing,cpu;
-int maxIterations;
-unsigned int n,numberOfSamples;
-double a,b;	// The interval that we are going to use
-bool useDouble = false;
+void	printUsage				(void);\
+void compareResults(const std::vector<double>& reference, const std::vector<float>& target, const std::string& label);
+void compareResults(const std::vector<double>& reference, const std::vector<double>& target, const std::string& label);
 
 
 int main(int argc, char *argv[]) {
@@ -102,9 +106,27 @@ int main(int argc, char *argv[]) {
 		gettimeofday(&expoEnd, NULL);
 		timeTotalCpu=((expoEnd.tv_sec + expoEnd.tv_usec*0.000001) - (expoStart.tv_sec + expoStart.tv_usec*0.000001));
 	}else {
-	// GPU 模式：调用你写的 launch_cuda_integral 接口
-	// GPU mode 
-		launch_cuda_integral(n, numberOfSamples, a, b, maxIterations, timing, verbose, useDouble);
+		// 新建存储 GPU 输出结果的 vector
+		std::vector<float> gpuFloatOut;
+		std::vector<double> gpuDoubleOut;
+
+		// 调用 GPU kernel，填充结果
+		launch_cuda_integral(n, numberOfSamples, a, b, maxIterations, timing, verbose, useDouble, gpuFloatOut, gpuDoubleOut);
+
+		// 将 CPU 结果扁平化为一维 vector（用来比较）
+		std::vector<double> cpuDoubleFlat;
+		for (ui = 0; ui < n; ++ui) {
+			for (uj = 0; uj < numberOfSamples; ++uj) {
+				cpuDoubleFlat.push_back(resultsDoubleCpu[ui][uj]);
+			}
+		}
+
+		// 比较误差
+		if (useDouble) {
+			compareResults(cpuDoubleFlat, gpuDoubleOut, "GPU_DOUBLE vs CPU_DOUBLE");
+		} else {
+			compareResults(cpuDoubleFlat, gpuFloatOut, "GPU_FLOAT vs CPU_DOUBLE");
+		}
 	}
 
 	//if (!cpu) test_double_kernel(n, numberOfSamples, a, b, maxIterations);
@@ -301,4 +323,24 @@ void printUsage () {
 	printf("      -v           : will activate the verbose mode  (default: no)\n");
 	printf("      -d           : use double precision for GPU computation (default: float)\n"); // new add
 	printf("     \n");
+}
+
+void compareResults(const std::vector<double>& reference, const std::vector<float>& target, const std::string& label) {
+	for (size_t i = 0; i < reference.size(); ++i) {
+		double ref = reference[i];
+		double tgt = static_cast<double>(target[i]);
+		double relError = std::abs(ref - tgt) / (std::abs(ref) + 1e-15);
+		std::cout << "[" << label << "] i=" << i << ": Ref=" << ref << ", Target=" << tgt
+		          << ", RelError=" << relError << std::endl;
+	}
+}
+
+void compareResults(const std::vector<double>& reference, const std::vector<double>& target, const std::string& label) {
+	for (size_t i = 0; i < reference.size(); ++i) {
+		double ref = reference[i];
+		double tgt = target[i];
+		double relError = std::abs(ref - tgt) / (std::abs(ref) + 1e-15);
+		std::cout << "[" << label << "] i=" << i << ": Ref=" << ref << ", Target=" << tgt
+		          << ", RelError=" << relError << std::endl;
+	}
 }

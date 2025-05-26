@@ -25,6 +25,7 @@ bool verbose = false;
 bool timing = false;
 bool cpu = true;
 bool useDouble = false;
+bool runGpu = true;
 int maxIterations = 2000000000;
 
 float	exponentialIntegralFloat		(const int n,const float x);
@@ -34,6 +35,8 @@ int		parseArguments				(int argc, char **argv);
 void	printUsage				(void);\
 void compareResults(const std::vector<double>& reference, const std::vector<float>& target, const std::string& label);
 void compareResults(const std::vector<double>& reference, const std::vector<double>& target, const std::string& label);
+void checkRelativeError(const std::vector<double>& reference, const std::vector<float>& target, double threshold);
+void checkRelativeError(const std::vector<double>& reference, const std::vector<double>& target, double threshold);
 
 
 int main(int argc, char *argv[]) {
@@ -105,15 +108,37 @@ int main(int argc, char *argv[]) {
 		}
 		gettimeofday(&expoEnd, NULL);
 		timeTotalCpu=((expoEnd.tv_sec + expoEnd.tv_usec*0.000001) - (expoStart.tv_sec + expoStart.tv_usec*0.000001));
-	}else {
-		// 新建存储 GPU 输出结果的 vector
+	}
+	// else {
+	// 	std::vector<float> gpuFloatOut;
+	// 	std::vector<double> gpuDoubleOut;
+
+	// 	launch_cuda_integral(n, numberOfSamples, a, b, maxIterations, timing, verbose, useDouble, gpuFloatOut, gpuDoubleOut);
+
+	// 	std::vector<double> cpuDoubleFlat;
+	// 	for (ui = 0; ui < n; ++ui) {
+	// 		for (uj = 0; uj < numberOfSamples; ++uj) {
+	// 			cpuDoubleFlat.push_back(resultsDoubleCpu[ui][uj]);
+	// 		}
+	// 	}
+
+	// 	if (useDouble) {
+	// 		compareResults(cpuDoubleFlat, gpuDoubleOut, "GPU_DOUBLE vs CPU_DOUBLE");
+	// 		checkRelativeError(cpuDoubleFlat, gpuDoubleOut, 1e-5);
+	// 	} else {
+	// 		compareResults(cpuDoubleFlat, gpuFloatOut, "GPU_FLOAT vs CPU_DOUBLE");
+	// 		checkRelativeError(cpuDoubleFlat, gpuFloatOut, 1e-5);
+	// 	}
+	// }
+
+	//------------------ Run GPU if not skipped ------------------
+	if (runGpu) {  
 		std::vector<float> gpuFloatOut;
 		std::vector<double> gpuDoubleOut;
 
-		// 调用 GPU kernel，填充结果
 		launch_cuda_integral(n, numberOfSamples, a, b, maxIterations, timing, verbose, useDouble, gpuFloatOut, gpuDoubleOut);
 
-		// 将 CPU 结果扁平化为一维 vector（用来比较）
+		// Flatten CPU results
 		std::vector<double> cpuDoubleFlat;
 		for (ui = 0; ui < n; ++ui) {
 			for (uj = 0; uj < numberOfSamples; ++uj) {
@@ -121,11 +146,15 @@ int main(int argc, char *argv[]) {
 			}
 		}
 
-		// 比较误差
-		if (useDouble) {
-			compareResults(cpuDoubleFlat, gpuDoubleOut, "GPU_DOUBLE vs CPU_DOUBLE");
-		} else {
-			compareResults(cpuDoubleFlat, gpuFloatOut, "GPU_FLOAT vs CPU_DOUBLE");
+		// 比较 CPU vs GPU
+		if (cpu) {
+			if (useDouble) {
+				compareResults(cpuDoubleFlat, gpuDoubleOut, "GPU_DOUBLE vs CPU_DOUBLE");
+				checkRelativeError(cpuDoubleFlat, gpuDoubleOut, 1e-5);
+			} else {
+				compareResults(cpuDoubleFlat, gpuFloatOut, "GPU_FLOAT vs CPU_DOUBLE");
+				checkRelativeError(cpuDoubleFlat, gpuFloatOut, 1e-5);
+			}
 		}
 	}
 
@@ -297,6 +326,8 @@ int parseArguments (int argc, char *argv[]) {
 				verbose = true; break;
 			case 'd':
 				useDouble = true; break;
+			case 'g':
+				runGpu = false; break;
 			default:
 				fprintf(stderr, "Invalid option given\n");
 				printUsage();
@@ -342,5 +373,29 @@ void compareResults(const std::vector<double>& reference, const std::vector<doub
 		double relError = std::abs(ref - tgt) / (std::abs(ref) + 1e-15);
 		std::cout << "[" << label << "] i=" << i << ": Ref=" << ref << ", Target=" << tgt
 		          << ", RelError=" << relError << std::endl;
+	}
+}
+
+void checkRelativeError(const std::vector<double>& reference, const std::vector<float>& target, double threshold = 1e-5) {
+	for (size_t i = 0; i < reference.size(); ++i) {
+		double ref = reference[i];
+		double tgt = static_cast<double>(target[i]);
+		double relError = std::abs(ref - tgt) / (std::abs(ref) + 1e-15);
+		if (relError > threshold) {
+			std::cout << "⚠️ [Warning] Relative error too high at i=" << i
+			          << ": Ref=" << ref << ", Target=" << tgt << ", RelError=" << relError << std::endl;
+		}
+	}
+}
+
+void checkRelativeError(const std::vector<double>& reference, const std::vector<double>& target, double threshold = 1e-5) {
+	for (size_t i = 0; i < reference.size(); ++i) {
+		double ref = reference[i];
+		double tgt = target[i];
+		double relError = std::abs(ref - tgt) / (std::abs(ref) + 1e-15);
+		if (relError > threshold) {
+			std::cout << "⚠️ [Warning] Relative error too high at i=" << i
+			          << ": Ref=" << ref << ", Target=" << tgt << ", RelError=" << relError << std::endl;
+		}
 	}
 }

@@ -413,6 +413,138 @@ int total = n * numberOfSamples;
 }
 
 
+// use stream optimization
+/**
+ * @brief Launches CUDA exponential integral computation using float or double precision.
+ *
+ * If float precision is used, memory allocation, kernel launch, and memory copy
+ * are executed in parallel chunks using CUDA streams to improve overlap between
+ * computation and data transfers.
+ *
+ * @param n                Maximum order of the exponential integral.
+ * @param numberOfSamples  Number of x samples in the interval [a, b].
+ * @param a                Left bound of interval.
+ * @param b                Right bound of interval.
+ * @param maxIterations    Maximum number of iterations for convergence.
+ * @param timing           If true, CUDA timing will be printed and stored.
+ * @param verbose          If true, prints individual GPU results.
+ * @param useDouble        If true, uses double precision. Otherwise, uses float.
+ * @param gpuFloatOut      Output vector for GPU float results (used if useDouble == false).
+ * @param gpuDoubleOut     Output vector for GPU double results (used if useDouble == true).
+ * @param totalGpuTime     Output: total GPU time in seconds (including malloc, kernel, copy, free).
+ */
+ /*
+void launch_cuda_integral(unsigned int n, unsigned int numberOfSamples, double a, double b, int maxIterations,
+                          bool timing, bool verbose, bool useDouble,
+                          std::vector<float>& gpuFloatOut, std::vector<double>& gpuDoubleOut,
+                          double& totalGpuTime) {
+    int total = n * numberOfSamples;
+
+    if (useDouble) {
+        // === DOUBLE VERSION ===
+        double* d_result;
+        gpuDoubleOut.resize(total);
+
+        cudaEvent_t start, stop;
+        float milliseconds = 0.0f;
+
+        if (timing) {
+            cudaEventCreate(&start);
+            cudaEventCreate(&stop);
+            cudaEventRecord(start);
+        }
+
+        cudaMalloc((void**)&d_result, sizeof(double) * total);
+
+        int threadsPerBlock = 256;
+        int blocksPerGrid = (total + threadsPerBlock - 1) / threadsPerBlock;
+
+        computeExponentialIntegralDoubleKernel<<<blocksPerGrid, threadsPerBlock>>>(
+            n, numberOfSamples, a, b, maxIterations, d_result);
+        cudaDeviceSynchronize();
+
+        cudaMemcpy(gpuDoubleOut.data(), d_result, sizeof(double) * total, cudaMemcpyDeviceToHost);
+        cudaFree(d_result);
+
+        if (timing) {
+            cudaEventRecord(stop);
+            cudaEventSynchronize(stop);
+            cudaEventElapsedTime(&milliseconds, start, stop);
+            std::cout << "[CUDA] Total GPU time (double) = " << milliseconds << " ms" << std::endl;
+            totalGpuTime = milliseconds / 1000.0;
+            cudaEventDestroy(start);
+            cudaEventDestroy(stop);
+        }
+
+        if (verbose) {
+            for (int i = 0; i < total; ++i)
+                std::cout << "[GPU-DOUBLE] E = " << gpuDoubleOut[i] << std::endl;
+        }
+
+    } else {
+        // === FLOAT VERSION with CUDA STREAMS ===
+        float* d_result;
+        gpuFloatOut.resize(total);
+
+        cudaEvent_t start, stop;
+        float milliseconds = 0.0f;
+
+        if (timing) {
+            cudaEventCreate(&start);
+            cudaEventCreate(&stop);
+            cudaEventRecord(start);
+        }
+
+        cudaMalloc((void**)&d_result, sizeof(float) * total);
+
+        const int chunkSize = 1 << 20; // 1M elements per stream chunk (customizable)
+        int totalChunks = (total + chunkSize - 1) / chunkSize;
+
+        cudaStream_t* streams = new cudaStream_t[totalChunks];
+        for (int i = 0; i < totalChunks; ++i)
+            cudaStreamCreate(&streams[i]);
+
+        for (int i = 0; i < totalChunks; ++i) {
+            int offset = i * chunkSize;
+            int currentSize = std::min(chunkSize, total - offset);
+
+            int threadsPerBlock = 256;
+            int blocksPerGrid = (currentSize + threadsPerBlock - 1) / threadsPerBlock;
+
+            computeExponentialIntegralKernel<<<blocksPerGrid, threadsPerBlock, 0, streams[i]>>>(
+                n, numberOfSamples, static_cast<float>(a), static_cast<float>(b),
+                maxIterations, d_result + offset);
+
+            cudaMemcpyAsync(gpuFloatOut.data() + offset, d_result + offset,
+                            sizeof(float) * currentSize, cudaMemcpyDeviceToHost, streams[i]);
+        }
+
+        for (int i = 0; i < totalChunks; ++i) {
+            cudaStreamSynchronize(streams[i]);
+            cudaStreamDestroy(streams[i]);
+        }
+        delete[] streams;
+
+        cudaFree(d_result);
+
+        if (timing) {
+            cudaEventRecord(stop);
+            cudaEventSynchronize(stop);
+            cudaEventElapsedTime(&milliseconds, start, stop);
+            std::cout << "[CUDA] Total GPU time (float, streams) = " << milliseconds << " ms" << std::endl;
+            totalGpuTime = milliseconds / 1000.0;
+            cudaEventDestroy(start);
+            cudaEventDestroy(stop);
+        }
+
+        if (verbose) {
+            for (int i = 0; i < total; ++i)
+                std::cout << "[GPU] E = " << gpuFloatOut[i] << std::endl;
+        }
+    }
+}
+*/
+
 void test_double_kernel(int n, int numberOfSamples, double a, double b, int maxIterations) {
 	int total = n * numberOfSamples;
 	double* d_result;

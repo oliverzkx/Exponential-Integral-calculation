@@ -6,12 +6,11 @@ This project computes the exponential integral \( E_n(x) \) using both **CPU (do
 
 ## 📁 Project Structure
 
-Assignment3/
-├── main.cpp # Main driver: parses args, runs CPU/GPU computations
-├── exponentialIntegral_gpu.cu # CUDA kernel + device logic + stream/const memory etc.
-├── exponentialIntegral_gpu.cuh # Header file declaring CUDA interface
-├── Makefile # Build script using nvcc + g++
-├── README.md # This file
+- `main.cpp` — Main driver: parses args, runs CPU/GPU computations
+- `exponentialIntegral_gpu.cu` — CUDA kernel + device logic + stream/const memory, etc.
+- `exponentialIntegral_gpu.cuh` — Header file declaring CUDA interface
+- `Makefile` — Build script using nvcc + g++
+- `README.md` — This file
 
 ---
 

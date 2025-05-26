@@ -143,6 +143,46 @@ __global__ void computeExponentialIntegralKernel(
     result[idx] = exponentialIntegralFloatDevice(i, x, maxIterations);
 }
 
+//shared mempry version
+/**
+ * @brief CUDA kernel to compute exponential integrals E_n(x) in float precision using shared memory.
+ *
+ * Each thread computes one E_n(x) for a specific (n, x) pair. Shared memory is used
+ * to temporarily store the x value for the thread to reduce redundant computation.
+ *
+ * @param n              Maximum order of the exponential integral.
+ * @param numberOfSamples Number of x samples in the interval [a, b].
+ * @param a              Left bound of the x interval.
+ * @param b              Right bound of the x interval.
+ * @param maxIterations  Maximum number of iterations for convergence in the algorithm.
+ * @param result         Output array of size n * numberOfSamples.
+ */
+ /*
+__global__ void computeExponentialIntegralKernel(
+    int n, int numberOfSamples, float a, float b, int maxIterations, float* result) {
+
+    extern __shared__ float sharedX[];  ///< Shared memory buffer for x values
+
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = n * numberOfSamples;
+    if (idx >= total) return;
+
+    int i = idx / numberOfSamples + 1;  // Convert flat index to order index (1-based)
+    int j = idx % numberOfSamples + 1;  // Convert flat index to sample index (1-based)
+
+    int tid = threadIdx.x;
+
+    // Compute x and store in shared memory
+    float x = a + ((b - a) / numberOfSamples) * j;
+    sharedX[tid] = x;
+
+    __syncthreads();  // Ensure all threads have written their x
+
+    // Compute and write result using shared x value
+    result[idx] = exponentialIntegralFloatDevice(i, sharedX[tid], maxIterations);
+}
+*/
+
 /**
  * @brief CUDA kernel that computes exponential integrals in double precision.
  *
@@ -260,6 +300,7 @@ void launch_cuda_integral(unsigned  int n, unsigned  int numberOfSamples, double
 }
 */
 
+
 /**
  * @brief Launches the CUDA exponential integral computation on the GPU.
  *
@@ -344,7 +385,11 @@ int total = n * numberOfSamples;
         int blocksPerGrid = (total + threadsPerBlock - 1) / threadsPerBlock;
 
         computeExponentialIntegralKernel<<<blocksPerGrid, threadsPerBlock>>>(
-            n, numberOfSamples, static_cast<float>(a), static_cast<float>(b), maxIterations, d_result);
+             n, numberOfSamples, static_cast<float>(a), static_cast<float>(b), maxIterations, d_result);
+
+		//shared memory version -> slower!
+		// computeExponentialIntegralKernel<<<blocksPerGrid, threadsPerBlock, threadsPerBlock * sizeof(float)>>>(
+    	// n, numberOfSamples, static_cast<float>(a), static_cast<float>(b), maxIterations, d_result);
         cudaDeviceSynchronize();
 
         cudaMemcpy(gpuFloatOut.data(), d_result, sizeof(float) * total, cudaMemcpyDeviceToHost);

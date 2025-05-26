@@ -3,6 +3,12 @@
 #include <vector>
 #include "exponentialIntegral_gpu.cuh"
 
+/// Constant memory declarations for float kernel
+__constant__ float const_a;
+__constant__ float const_b;
+__constant__ int const_numberOfSamples;
+__constant__ int const_maxIterations;
+
 /**
  * @brief A dummy CUDA kernel placeholder (not used in final implementation).
  */
@@ -141,6 +147,27 @@ __global__ void computeExponentialIntegralKernel(
 
     float x = a + ((b - a) / numberOfSamples) * j;
     result[idx] = exponentialIntegralFloatDevice(i, x, maxIterations);
+}
+
+/**
+ * @brief CUDA kernel that computes exponential integrals E_n(x) using float precision and constant memory.
+ *
+ * This version of the kernel uses constant memory for the integration bounds, number of samples,
+ * and maximum number of iterations, reducing register/local memory pressure and potentially improving performance.
+ *
+ * @param n The maximum order of the exponential integral.
+ * @param result The output array to store results, of size n × numberOfSamples.
+ */
+__global__ void computeExponentialIntegralKernel_const(int n, float* result) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = n * const_numberOfSamples;
+    if (idx >= total) return;
+
+    int i = idx / const_numberOfSamples + 1;
+    int j = idx % const_numberOfSamples + 1;
+
+    float x = const_a + ((const_b - const_a) / const_numberOfSamples) * j;
+    result[idx] = exponentialIntegralFloatDevice(i, x, const_maxIterations);
 }
 
 //shared mempry version
@@ -301,6 +328,7 @@ void launch_cuda_integral(unsigned  int n, unsigned  int numberOfSamples, double
 */
 
 
+// original correct and fast version
 /**
  * @brief Launches the CUDA exponential integral computation on the GPU.
  *
@@ -412,6 +440,124 @@ int total = n * numberOfSamples;
     }
 }
 
+
+//use const memory
+/**
+ * @brief Launches the CUDA exponential integral computation on the GPU using float or double precision.
+ *
+ * This version includes constant memory optimization for float precision execution. It times the entire CUDA
+ * operation (allocation, kernel, copy, and free), prints timing results, and stores final outputs.
+ *
+ * @param n                Maximum order of the exponential integral.
+ * @param numberOfSamples  Number of x samples in the interval [a, b].
+ * @param a                Left bound of x interval.
+ * @param b                Right bound of x interval.
+ * @param maxIterations    Maximum number of iterations for convergence.
+ * @param timing           Whether to print and store execution time.
+ * @param verbose          Whether to print each result.
+ * @param useDouble        If true, use double precision. If false, use float.
+ * @param gpuFloatOut      Output vector for float results (used if useDouble == false).
+ * @param gpuDoubleOut     Output vector for double results (used if useDouble == true).
+ * @param totalGpuTime     Output total GPU time in seconds.
+ */
+ /*
+void launch_cuda_integral(unsigned int n, unsigned int numberOfSamples, double a, double b, int maxIterations,
+                          bool timing, bool verbose, bool useDouble,
+                          std::vector<float>& gpuFloatOut, std::vector<double>& gpuDoubleOut,
+                          double& totalGpuTime) {
+    int total = n * numberOfSamples;
+
+    if (useDouble) {
+        // === DOUBLE PRECISION ===
+        double* d_result;
+        gpuDoubleOut.resize(total);
+
+        cudaEvent_t start, stop;
+        float milliseconds = 0.0f;
+
+        if (timing) {
+            cudaEventCreate(&start);
+            cudaEventCreate(&stop);
+            cudaEventRecord(start);
+        }
+
+        cudaMalloc((void**)&d_result, sizeof(double) * total);
+
+        int threadsPerBlock = 256;
+        int blocksPerGrid = (total + threadsPerBlock - 1) / threadsPerBlock;
+
+        computeExponentialIntegralDoubleKernel<<<blocksPerGrid, threadsPerBlock>>>(
+            n, numberOfSamples, a, b, maxIterations, d_result);
+        cudaDeviceSynchronize();
+
+        cudaMemcpy(gpuDoubleOut.data(), d_result, sizeof(double) * total, cudaMemcpyDeviceToHost);
+        cudaFree(d_result);
+
+        if (timing) {
+            cudaEventRecord(stop);
+            cudaEventSynchronize(stop);
+            cudaEventElapsedTime(&milliseconds, start, stop);
+            std::cout << "[CUDA] Total GPU time (double) = " << milliseconds << " ms" << std::endl;
+            totalGpuTime = milliseconds / 1000.0;
+            cudaEventDestroy(start);
+            cudaEventDestroy(stop);
+        }
+
+        if (verbose) {
+            for (int i = 0; i < total; ++i)
+                std::cout << "[GPU-DOUBLE] E = " << gpuDoubleOut[i] << std::endl;
+        }
+
+    } else {
+        // === FLOAT PRECISION with constant memory ===
+        float* d_result;
+        gpuFloatOut.resize(total);
+
+        cudaEvent_t start, stop;
+        float milliseconds = 0.0f;
+
+        if (timing) {
+            cudaEventCreate(&start);
+            cudaEventCreate(&stop);
+            cudaEventRecord(start);
+        }
+
+        cudaMalloc((void**)&d_result, sizeof(float) * total);
+
+        // Copy constants to GPU constant memory
+        float a_f = static_cast<float>(a);
+        float b_f = static_cast<float>(b);
+        cudaMemcpyToSymbol(const_a, &a_f, sizeof(float));
+        cudaMemcpyToSymbol(const_b, &b_f, sizeof(float));
+        cudaMemcpyToSymbol(const_numberOfSamples, &numberOfSamples, sizeof(int));
+        cudaMemcpyToSymbol(const_maxIterations, &maxIterations, sizeof(int));
+
+        int threadsPerBlock = 256;
+        int blocksPerGrid = (total + threadsPerBlock - 1) / threadsPerBlock;
+
+        computeExponentialIntegralKernel_const<<<blocksPerGrid, threadsPerBlock>>>(n, d_result);
+        cudaDeviceSynchronize();
+
+        cudaMemcpy(gpuFloatOut.data(), d_result, sizeof(float) * total, cudaMemcpyDeviceToHost);
+        cudaFree(d_result);
+
+        if (timing) {
+            cudaEventRecord(stop);
+            cudaEventSynchronize(stop);
+            cudaEventElapsedTime(&milliseconds, start, stop);
+            std::cout << "[CUDA] Total GPU time (float, const memory) = " << milliseconds << " ms" << std::endl;
+            totalGpuTime = milliseconds / 1000.0;
+            cudaEventDestroy(start);
+            cudaEventDestroy(stop);
+        }
+
+        if (verbose) {
+            for (int i = 0; i < total; ++i)
+                std::cout << "[GPU] E = " << gpuFloatOut[i] << std::endl;
+        }
+    }
+}
+*/
 
 // use stream optimization
 /**

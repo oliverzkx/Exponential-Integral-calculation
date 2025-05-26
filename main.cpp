@@ -83,6 +83,7 @@ int main(int argc, char *argv[]) {
 	std::vector< std::vector< double > > resultsDoubleCpu;
 
 	double timeTotalCpu=0.0;
+	double timeTotalGpu = 0.0;
 
 	try {
 		resultsFloatCpu.resize(n,vector< float >(numberOfSamples));
@@ -136,7 +137,8 @@ int main(int argc, char *argv[]) {
 		std::vector<float> gpuFloatOut;
 		std::vector<double> gpuDoubleOut;
 
-		launch_cuda_integral(n, numberOfSamples, a, b, maxIterations, timing, verbose, useDouble, gpuFloatOut, gpuDoubleOut);
+		//launch_cuda_integral(n, numberOfSamples, a, b, maxIterations, timing, verbose, useDouble, gpuFloatOut, gpuDoubleOut);
+		launch_cuda_integral(n, numberOfSamples, a, b, maxIterations, timing, verbose, useDouble, gpuFloatOut, gpuDoubleOut,timeTotalGpu);
 
 		// Flatten CPU results
 		std::vector<double> cpuDoubleFlat;
@@ -147,7 +149,8 @@ int main(int argc, char *argv[]) {
 		}
 
 		// 比较 CPU vs GPU
-		if (cpu) {
+		//if (cpu) {
+		if (cpu && verbose) {
 			if (useDouble) {
 				compareResults(cpuDoubleFlat, gpuDoubleOut, "GPU_DOUBLE vs CPU_DOUBLE");
 				checkRelativeError(cpuDoubleFlat, gpuDoubleOut, 1e-5);
@@ -163,6 +166,12 @@ int main(int argc, char *argv[]) {
 	if (timing) {
 		if (cpu) {
 			printf ("calculating the exponentials on the cpu took: %f seconds\n",timeTotalCpu);
+		}
+		if (runGpu) {
+		printf("calculating the exponentials on the gpu took: %f seconds\n", timeTotalGpu);
+		}
+		if (cpu && runGpu && timeTotalGpu > 0.0) {
+			printf("Speedup (CPU / GPU) = %.2fx\n", timeTotalCpu / timeTotalGpu);
 		}
 	}
 

@@ -375,7 +375,8 @@ void test_double_kernel(int n, int numberOfSamples, double a, double b, int maxI
 
 	cudaMalloc((void**)&d_result, sizeof(double) * total);
 
-	int threadsPerBlock = 256;
+	//int threadsPerBlock = 256;
+	int threadsPerBlock = 64; // 32, 64, 128, 256, 512, 1024
 	int blocksPerGrid = (total + threadsPerBlock - 1) / threadsPerBlock;
 
 	computeExponentialIntegralDoubleKernel<<<blocksPerGrid, threadsPerBlock>>>(
